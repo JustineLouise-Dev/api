@@ -216,9 +216,8 @@
 
 <script>
 (function () {
-  // Ganti dengan URL worker kamu (sama seperti WORKER_URL di file game),
-  // atau kosongkan ('') jika admin.html ini di-deploy di origin yang sama.
-  const API_BASE = '';
+  // URL Worker yang menyediakan endpoint admin.
+  const API_BASE = 'https://api.justinelouise.workers.dev';
 
   const STORAGE_KEY = 'sambungkata_admin_key';
   let adminKey = sessionStorage.getItem(STORAGE_KEY) || '';
