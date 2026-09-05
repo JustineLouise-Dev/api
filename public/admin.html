@@ -163,8 +163,9 @@
 <body>
 
   <div id="login">
-    <h1>🔤 Sambung Kata — Admin</h1>
-    <input type="password" id="keyInput" placeholder="Admin key" autocomplete="current-password">
+    <h1 id="loginTitle">🔤 Sambung Kata — Admin</h1>
+    <input type="password" id="keyInput" placeholder="Password admin" autocomplete="current-password">
+    <input type="password" id="confirmInput" placeholder="Ulangi password" autocomplete="new-password" style="display:none;">
     <button id="loginBtn">Masuk</button>
     <div id="loginError"></div>
   </div>
@@ -224,6 +225,30 @@
   let autoRefreshTimer = null;
 
   const $ = (id) => document.getElementById(id);
+
+  async function getAdminStatus() {
+    const res = await fetch(API_BASE + '/api/admin/status');
+    return res.json();
+  }
+
+  function showSetup() {
+    $('loginTitle').textContent = 'Buat Password Admin';
+    $('keyInput').placeholder = 'Password baru (minimal 8 karakter)';
+    $('keyInput').autocomplete = 'new-password';
+    $('confirmInput').style.display = 'block';
+    $('loginBtn').textContent = 'Simpan Password';
+    $('loginBtn').dataset.mode = 'setup';
+  }
+
+  function showLoginForm(errorMsg) {
+    $('loginTitle').textContent = '🔤 Sambung Kata — Admin';
+    $('keyInput').placeholder = 'Password admin';
+    $('keyInput').autocomplete = 'current-password';
+    $('confirmInput').style.display = 'none';
+    $('loginBtn').textContent = 'Masuk';
+    $('loginBtn').dataset.mode = 'login';
+    showLogin(errorMsg);
+  }
 
   function showDashboard() {
     $('login').style.display = 'none';
@@ -348,9 +373,32 @@
     });
   }
 
-  $('loginBtn').addEventListener('click', () => {
+  $('loginBtn').addEventListener('click', async () => {
     const val = $('keyInput').value.trim();
     if (!val) return;
+    if ($('loginBtn').dataset.mode === 'setup') {
+      if (val.length < 8) {
+        $('loginError').textContent = 'Password minimal 8 karakter.';
+        return;
+      }
+      if (val !== $('confirmInput').value.trim()) {
+        $('loginError').textContent = 'Konfirmasi password tidak cocok.';
+        return;
+      }
+      const res = await fetch(API_BASE + '/api/admin/setup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: val }),
+      });
+      if (res.status === 409) {
+        showLoginForm('Password admin sudah pernah dibuat. Silakan masuk.');
+        return;
+      }
+      if (!res.ok) {
+        $('loginError').textContent = 'Password gagal disimpan.';
+        return;
+      }
+    }
     adminKey = val;
     sessionStorage.setItem(STORAGE_KEY, adminKey);
     showDashboard();
@@ -374,11 +422,15 @@
 
   setupAutoRefresh();
 
-  if (adminKey) {
-    showDashboard();
-  } else {
-    showLogin();
-  }
+  getAdminStatus().then((status) => {
+    if (!status.configured) {
+      showSetup();
+    } else if (adminKey) {
+      showDashboard();
+    } else {
+      showLoginForm();
+    }
+  }).catch(() => showLoginForm('Gagal menghubungi server.'));
 })();
 </script>
 </body>

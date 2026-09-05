@@ -43,6 +43,40 @@ function getVisitLogStub(env) {
   return env.VISIT_LOG.get(id);
 }
 
+const PASSWORD_ITERATIONS = 100000;
+
+function encodeBase64(bytes) {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
+}
+
+function decodeBase64(value) {
+  const binary = atob(value);
+  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+}
+
+async function hashPassword(password, salt) {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(password),
+    "PBKDF2",
+    false,
+    ["deriveBits"]
+  );
+  const bits = await crypto.subtle.deriveBits(
+    { name: "PBKDF2", salt, iterations: PASSWORD_ITERATIONS, hash: "SHA-256" },
+    key,
+    256
+  );
+  return encodeBase64(new Uint8Array(bits));
+}
+
+async function hashRequestPassword(request, salt) {
+  const password = request.headers.get("X-Admin-Key") || "";
+  return hashPassword(password, salt);
+}
+
 /**
  * Cloudflare's CF-Connecting-IP passes through whatever the client actually
  * connected with — no normalization to IPv4. This just classifies the
@@ -124,13 +158,50 @@ export default {
       return env.ASSETS.fetch(new Request(new URL("/admin.html", request.url), request));
     }
 
+    // --- Admin: configure password ---
+    if (url.pathname === "/api/admin/status" && request.method === "GET") {
+      const stub = getVisitLogStub(env);
+      const upstream = await stub.fetch("https://internal/admin-status");
+      return json(await upstream.json());
+    }
+
+    if (url.pathname === "/api/admin/setup" && request.method === "POST") {
+      const { password } = await request.json();
+      if (typeof password !== "string" || password.length < 8) {
+        return json({ error: "password_too_short" }, { status: 400 });
+      }
+      const salt = crypto.getRandomValues(new Uint8Array(16));
+      const passwordHash = await hashPassword(password, salt);
+      const stub = getVisitLogStub(env);
+      const upstream = await stub.fetch("https://internal/admin-setup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ salt: encodeBase64(salt), passwordHash }),
+      });
+      return json(await upstream.json(), { status: upstream.status });
+    }
+
     // --- Admin: list logged visits ---
     if (url.pathname === "/api/visits" && request.method === "GET") {
-      const adminKey = request.headers.get("X-Admin-Key") || "";
-      if (!env.ADMIN_KEY || adminKey !== env.ADMIN_KEY) {
+      const stub = getVisitLogStub(env);
+      const statusResponse = await stub.fetch("https://internal/admin-status");
+      const status = await statusResponse.json();
+      if (!status.configured) {
         return json({ error: "unauthorized" }, { status: 401 });
       }
-      const stub = getVisitLogStub(env);
+      const settingsResponse = await stub.fetch("https://internal/admin-settings");
+      const settings = await settingsResponse.json();
+      const salt = settings.salt;
+      if (!salt) return json({ error: "unauthorized" }, { status: 401 });
+      const passwordHash = await hashRequestPassword(request, decodeBase64(salt));
+      const auth = await stub.fetch("https://internal/admin-auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ passwordHash }),
+      });
+      if (!(await auth.json()).authorized) {
+        return json({ error: "unauthorized" }, { status: 401 });
+      }
       const upstream = await stub.fetch("https://internal/list?" + url.searchParams.toString());
       const data = await upstream.json();
       return json(data);

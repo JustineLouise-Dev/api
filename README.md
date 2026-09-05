@@ -58,14 +58,11 @@ melihat datanya lewat `admin.html`.
 
 Setup:
 
-1. Set admin key sebagai secret (jangan taruh di `wrangler.toml`):
-	```
-	wrangler secret put ADMIN_KEY
-	```
-2. Deploy seperti biasa (`npm run deploy`) — migration untuk
+1. Deploy seperti biasa (`npm run deploy`) — migration untuk
    `VisitLogDurableObject` akan otomatis dijalankan.
-3. Buka `https://api.justinelouise.workers.dev/admin` dan masukkan admin key
-	yang sama.
+2. Buka `https://api.justinelouise.workers.dev/admin`. Pada kunjungan pertama,
+	buat password minimal 8 karakter. Password berikutnya diverifikasi dari
+	hash yang disimpan di Durable Object, bukan dari Wrangler secret.
 
 Baris log dibatasi otomatis ke 5000 entri terakhir (yang lama otomatis
 dihapus) supaya storage Durable Object tidak membengkak.

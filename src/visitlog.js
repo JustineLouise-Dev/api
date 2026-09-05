@@ -49,6 +49,13 @@ export class VisitLogDurableObject {
       `);
       this.sql.exec(`CREATE INDEX IF NOT EXISTS idx_visits_time ON visits(time)`);
       this.sql.exec(`CREATE INDEX IF NOT EXISTS idx_visits_ip ON visits(ip)`);
+      this.sql.exec(`
+        CREATE TABLE IF NOT EXISTS admin_settings (
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          salt TEXT NOT NULL,
+          passwordHash TEXT NOT NULL
+        )
+      `);
     });
   }
 
@@ -66,7 +73,50 @@ export class VisitLogDurableObject {
       return this.list(url.searchParams);
     }
 
+    if (url.pathname === "/admin-status" && request.method === "GET") {
+      return new Response(JSON.stringify({ configured: this.isAdminConfigured() }), {
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    if (url.pathname === "/admin-settings" && request.method === "GET") {
+      const settings = [...this.sql.exec(`SELECT salt FROM admin_settings WHERE id = 1`)][0];
+      return new Response(JSON.stringify(settings || {}), {
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    if (url.pathname === "/admin-setup" && request.method === "POST") {
+      const { salt, passwordHash } = await request.json();
+      if (!salt || !passwordHash) {
+        return new Response(JSON.stringify({ error: "invalid_setup" }), { status: 400 });
+      }
+      if (this.isAdminConfigured()) {
+        return new Response(JSON.stringify({ error: "already_configured" }), { status: 409 });
+      }
+      this.sql.exec(
+        `INSERT INTO admin_settings (id, salt, passwordHash) VALUES (1, ?, ?)`,
+        salt,
+        passwordHash
+      );
+      return new Response(JSON.stringify({ ok: true }), {
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    if (url.pathname === "/admin-auth" && request.method === "POST") {
+      const { passwordHash } = await request.json();
+      const settings = [...this.sql.exec(`SELECT passwordHash FROM admin_settings WHERE id = 1`)][0];
+      return new Response(JSON.stringify({
+        authorized: !!settings && passwordHash === settings.passwordHash,
+      }), { headers: { "Content-Type": "application/json" } });
+    }
+
     return new Response("not found", { status: 404 });
+  }
+
+  isAdminConfigured() {
+    return [...this.sql.exec(`SELECT id FROM admin_settings WHERE id = 1`)].length > 0;
   }
 
   insert(row) {

@@ -21,8 +21,3 @@ new_sqlite_classes = ["RoomDurableObject"]
 [[migrations]]
 tag = "v2"
 new_sqlite_classes = ["VisitLogDurableObject"]
-
-# Set the admin panel's login key as a secret (do NOT put the real value
-# here in plaintext). Run:
-#   wrangler secret put ADMIN_KEY
-# and enter a strong random value when prompted.
