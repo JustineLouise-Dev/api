@@ -64,9 +64,8 @@ Setup:
 	```
 2. Deploy seperti biasa (`npm run deploy`) — migration untuk
    `VisitLogDurableObject` akan otomatis dijalankan.
-3. Buka `admin.html` (bisa di-host statis di mana saja, termasuk lokal) dan
-   masukkan admin key yang sama. Jika `admin.html` di-serve dari domain lain
-   dari worker-nya, isi `API_BASE` di dalam `<script>` dengan URL worker kamu.
+3. Buka `https://api.justinelouise.workers.dev/admin` dan masukkan admin key
+	yang sama.
 
 Baris log dibatasi otomatis ke 5000 entri terakhir (yang lama otomatis
 dihapus) supaya storage Durable Object tidak membengkak.

@@ -119,6 +119,11 @@ export default {
       return new Response(null, { headers: CORS_HEADERS });
     }
 
+    // --- Admin panel ---
+    if ((url.pathname === "/admin" || url.pathname === "/admin.html") && request.method === "GET") {
+      return env.ASSETS.fetch(new Request(new URL("/admin.html", request.url), request));
+    }
+
     // --- Admin: list logged visits ---
     if (url.pathname === "/api/visits" && request.method === "GET") {
       const adminKey = request.headers.get("X-Admin-Key") || "";
