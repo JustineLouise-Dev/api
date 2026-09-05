@@ -1,78 +1,115 @@
-# api
+# Instalasi Sambung Kata
 
-# Sambung Kata — Worker Multiplayer Backend
+Panduan pemasangan backend Sambung Kata di VPS, Termux, atau panel
+Pterodactyl.
 
-Backend realtime untuk game Sambung Kata, dijalankan sebagai Cloudflare
-Worker + Durable Object (satu Durable Object = satu room).
+## Persyaratan
 
-## Cara deploy
+- Node.js 18 atau lebih baru
+- npm
+- File proyek sudah di-upload atau di-clone ke server
 
-1. Install Wrangler (sekali saja):
-	```
-	npm install -g wrangler
-	```
+## Instalasi umum
 
-2. Login ke akun Cloudflare kamu:
-	```
-	wrangler login
-	```
+Masuk ke folder proyek, lalu jalankan:
 
-3. Dari folder ini, deploy:
-	```
-	npm install
-	npm run deploy
-	```
-
-4. Setelah selesai, Wrangler akan menampilkan URL worker kamu, contoh:
-	```
-	https://sambungkata-worker.<subdomain-kamu>.workers.dev
-	```
-
-5. Buka file game (`sambung-kata.html`), cari baris:
-	```js
-	const WORKER_URL = "https://sambungkata-worker.YOUR-SUBDOMAIN.workers.dev";
-	```
-	Ganti dengan URL worker kamu dari langkah 4.
-
-## Cara kerja singkat
-
-- `POST /api/room` → membuat room baru, mengembalikan kode room 5 karakter.
-- `GET /api/room/:code/exists` → mengecek apakah kode room valid (dipakai saat Join Room).
-- `GET /ws/:code?name=Nama` → upgrade ke WebSocket, masuk ke room tsb.
-- `GET /api/visits` → (admin only, lihat di bawah) daftar hit yang tercatat.
-
-Semua logika permainan (giliran, validasi kata, nyawa, skor, timer 15 detik
-per giliran) berjalan di server (`src/room.js`) sehingga tidak bisa dicurangi
-dari sisi client — client hanya mengirim kata yang diketik pemain dan
-menampilkan state yang dikirim balik oleh server.
-
-## Admin panel (log koneksi)
-
-Setiap hit ke `/api/room`, `/api/room/:code/exists`, dan upgrade `/ws/:code`
-dicatat (fire-and-forget, tidak memperlambat request asli) ke Durable Object
-terpisah (`src/visitlog.js`, binding `VISIT_LOG`). Yang disimpan murni data
-koneksi mentah — IP, User-Agent, header `cf-*` dari Cloudflare (negara, kota,
-ASN, colo, versi TLS/HTTP), Accept-Language, dan header `Sec-Fetch-*` — tanpa
-skor atau vonis "ini bot" dari sistem. Keputusan itu diserahkan ke kamu saat
-melihat datanya lewat `admin.html`.
-
-Setup:
-
-1. Deploy seperti biasa (`npm run deploy`) — migration untuk
-   `VisitLogDurableObject` akan otomatis dijalankan.
-2. Buka `https://api.justinelouise.workers.dev/admin`. Pada kunjungan pertama,
-	buat password minimal 8 karakter. Password berikutnya diverifikasi dari
-	hash yang disimpan di Durable Object, bukan dari Wrangler secret.
-
-Baris log dibatasi otomatis ke 5000 entri terakhir (yang lama otomatis
-dihapus) supaya storage Durable Object tidak membengkak.
-
-## Testing lokal
-
+```bash
+npm install
 ```
+
+Jalankan aplikasi:
+
+```bash
 npm run dev
 ```
-Wrangler akan menjalankan worker di `http://localhost:8787`. Untuk testing
-lokal, ubah sementara `WORKER_URL` di file game menjadi
-`http://localhost:8787` (dan protokol WebSocket ke `ws://` bukan `wss://` —
-sudah otomatis ditangani oleh kode game berdasarkan `https`/`http`).
+
+Aplikasi berjalan pada port `8787` secara default.
+
+## VPS Linux
+
+### Ubuntu/Debian
+
+```bash
+sudo apt update
+sudo apt install -y nodejs npm git
+git clone URL_REPOSITORY
+cd api
+npm install
+npm run dev -- --ip 0.0.0.0 --port 8787
+```
+
+Ganti `URL_REPOSITORY` dengan URL repository proyek.
+
+Untuk menjalankan di background menggunakan PM2:
+
+```bash
+sudo npm install -g pm2
+pm2 start "npm run dev -- --ip 0.0.0.0 --port 8787" --name sambungkata
+pm2 save
+pm2 startup
+```
+
+Pastikan port `8787` dibuka pada firewall VPS jika aplikasi diakses langsung:
+
+```bash
+sudo ufw allow 8787/tcp
+```
+
+### Menjalankan ulang setelah update
+
+```bash
+cd api
+git pull
+npm install
+pm2 restart sambungkata
+```
+
+## Termux
+
+```bash
+pkg update && pkg upgrade
+pkg install nodejs git
+git clone URL_REPOSITORY
+cd api
+npm install
+npm run dev -- --ip 0.0.0.0 --port 8787
+```
+
+Untuk menjalankan kembali, masuk ke folder proyek dan jalankan:
+
+```bash
+npm run dev -- --ip 0.0.0.0 --port 8787
+```
+
+Jangan menutup sesi Termux jika aplikasi harus tetap berjalan. Untuk proses
+yang tetap hidup setelah terminal ditutup, gunakan `tmux`:
+
+```bash
+pkg install tmux
+tmux new -s sambungkata
+npm run dev -- --ip 0.0.0.0 --port 8787
+```
+
+Tekan `Ctrl+B`, lalu `D` untuk keluar dari sesi tanpa menghentikan aplikasi.
+
+## Pterodactyl
+
+1. Buat server baru dengan image Node.js 18 atau lebih baru.
+2. Upload atau clone seluruh isi proyek ke server.
+3. Atur startup command menjadi:
+
+```bash
+npm install && npm run dev -- --ip 0.0.0.0 --port ${SERVER_PORT}
+```
+
+4. Jalankan server dari panel.
+
+Gunakan port yang diberikan panel melalui `${SERVER_PORT}`. Jangan mengunci
+port ke `8787` pada Pterodactyl karena setiap server biasanya mendapat port
+yang berbeda.
+
+## Catatan
+
+- Jalankan semua perintah dari folder yang berisi `package.json`.
+- Jangan menghapus folder `src` dan `public`.
+- Jika port sudah digunakan, ganti port pada perintah start.
