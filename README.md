@@ -39,11 +39,37 @@ Worker + Durable Object (satu Durable Object = satu room).
 - `POST /api/room` → membuat room baru, mengembalikan kode room 5 karakter.
 - `GET /api/room/:code/exists` → mengecek apakah kode room valid (dipakai saat Join Room).
 - `GET /ws/:code?name=Nama` → upgrade ke WebSocket, masuk ke room tsb.
+- `GET /api/visits` → (admin only, lihat di bawah) daftar hit yang tercatat.
 
 Semua logika permainan (giliran, validasi kata, nyawa, skor, timer 15 detik
 per giliran) berjalan di server (`src/room.js`) sehingga tidak bisa dicurangi
 dari sisi client — client hanya mengirim kata yang diketik pemain dan
 menampilkan state yang dikirim balik oleh server.
+
+## Admin panel (log koneksi)
+
+Setiap hit ke `/api/room`, `/api/room/:code/exists`, dan upgrade `/ws/:code`
+dicatat (fire-and-forget, tidak memperlambat request asli) ke Durable Object
+terpisah (`src/visitlog.js`, binding `VISIT_LOG`). Yang disimpan murni data
+koneksi mentah — IP, User-Agent, header `cf-*` dari Cloudflare (negara, kota,
+ASN, colo, versi TLS/HTTP), Accept-Language, dan header `Sec-Fetch-*` — tanpa
+skor atau vonis "ini bot" dari sistem. Keputusan itu diserahkan ke kamu saat
+melihat datanya lewat `admin.html`.
+
+Setup:
+
+1. Set admin key sebagai secret (jangan taruh di `wrangler.toml`):
+	```
+	wrangler secret put ADMIN_KEY
+	```
+2. Deploy seperti biasa (`npm run deploy`) — migration untuk
+   `VisitLogDurableObject` akan otomatis dijalankan.
+3. Buka `admin.html` (bisa di-host statis di mana saja, termasuk lokal) dan
+   masukkan admin key yang sama. Jika `admin.html` di-serve dari domain lain
+   dari worker-nya, isi `API_BASE` di dalam `<script>` dengan URL worker kamu.
+
+Baris log dibatasi otomatis ke 5000 entri terakhir (yang lama otomatis
+dihapus) supaya storage Durable Object tidak membengkak.
 
 ## Testing lokal
 

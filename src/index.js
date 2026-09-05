@@ -5,15 +5,21 @@
  *   POST /api/room               -> create a new room, returns { code }
  *   GET  /api/room/:code/exists  -> check if a room code is valid
  *   GET  /ws/:code?name=...      -> upgrade to WebSocket, join room :code
+ *   GET  /api/visits             -> (admin only) list logged connection hits
  *
  * All room state (players, turn order, timers, word chain, scoring) lives
  * inside the RoomDurableObject so every player in a room talks to the same
  * single-threaded object — no external DB needed for realtime sync.
+ *
+ * Every /api/room, /exists, and /ws upgrade hit is also fire-and-forget
+ * logged (raw connection details only, no bot scoring/judgement) into a
+ * single global VisitLogDurableObject for inspection via admin.html.
  */
 
 import { RoomDurableObject } from "./room.js";
+import { VisitLogDurableObject } from "./visitlog.js";
 
-export { RoomDurableObject };
+export { RoomDurableObject, VisitLogDurableObject };
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -30,6 +36,69 @@ function json(data, init = {}) {
       ...(init.headers || {}),
     },
   });
+}
+
+function getVisitLogStub(env) {
+  const id = env.VISIT_LOG.idFromName("global");
+  return env.VISIT_LOG.get(id);
+}
+
+/**
+ * Cloudflare's CF-Connecting-IP passes through whatever the client actually
+ * connected with — no normalization to IPv4. This just classifies the
+ * string so the admin panel can filter by it.
+ */
+function detectIpVersion(ip) {
+  if (!ip) return "";
+  if (ip.includes(":")) return "IPv6";
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(ip)) return "IPv4";
+  return "";
+}
+
+/**
+ * Fire-and-forget log of a connection hit. Never awaited by the caller in a
+ * way that could slow down or fail the real response — errors are swallowed.
+ */
+function logVisit(request, env, path) {
+  try {
+    const cf = request.cf || {};
+    const headers = request.headers;
+    const ip = headers.get("CF-Connecting-IP") || "";
+    const row = {
+      time: Date.now(),
+      ip,
+      ipVersion: detectIpVersion(ip),
+      method: request.method,
+      path,
+      userAgent: headers.get("User-Agent") || "",
+      country: cf.country || "",
+      city: cf.city || "",
+      region: cf.region || "",
+      colo: cf.colo || "",
+      asn: cf.asn != null ? String(cf.asn) : "",
+      asOrganization: cf.asOrganization || "",
+      tlsVersion: cf.tlsVersion || "",
+      httpProtocol: cf.httpProtocol || "",
+      acceptLanguage: headers.get("Accept-Language") || "",
+      accept: headers.get("Accept") || "",
+      referer: headers.get("Referer") || "",
+      secFetchSite: headers.get("Sec-Fetch-Site") || "",
+      secFetchMode: headers.get("Sec-Fetch-Mode") || "",
+      secFetchDest: headers.get("Sec-Fetch-Dest") || "",
+      headersJson: JSON.stringify(Object.fromEntries(headers.entries())),
+    };
+    const stub = getVisitLogStub(env);
+    // Don't await — logging should never block or break the real request.
+    stub
+      .fetch("https://internal/record", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(row),
+      })
+      .catch((err) => console.error("visit log error", err));
+  } catch (err) {
+    console.error("visit log build error", err);
+  }
 }
 
 function randomRoomCode() {
@@ -50,8 +119,21 @@ export default {
       return new Response(null, { headers: CORS_HEADERS });
     }
 
+    // --- Admin: list logged visits ---
+    if (url.pathname === "/api/visits" && request.method === "GET") {
+      const adminKey = request.headers.get("X-Admin-Key") || "";
+      if (!env.ADMIN_KEY || adminKey !== env.ADMIN_KEY) {
+        return json({ error: "unauthorized" }, { status: 401 });
+      }
+      const stub = getVisitLogStub(env);
+      const upstream = await stub.fetch("https://internal/list?" + url.searchParams.toString());
+      const data = await upstream.json();
+      return json(data);
+    }
+
     // --- Create room ---
     if (url.pathname === "/api/room" && request.method === "POST") {
+      logVisit(request, env, url.pathname);
       let code = randomRoomCode();
       // Extremely unlikely collision, but loop a couple times just in case
       // by asking the DO itself whether it already has players.
@@ -72,6 +154,7 @@ export default {
     // --- Check room exists ---
     const existsMatch = url.pathname.match(/^\/api\/room\/([A-Z0-9]+)\/exists$/i);
     if (existsMatch && request.method === "GET") {
+      logVisit(request, env, url.pathname);
       const code = existsMatch[1].toUpperCase();
       const id = env.ROOMS.idFromName(code);
       const stub = env.ROOMS.get(id);
@@ -83,6 +166,7 @@ export default {
     // --- WebSocket upgrade into a room ---
     const wsMatch = url.pathname.match(/^\/ws\/([A-Z0-9]+)$/i);
     if (wsMatch) {
+      logVisit(request, env, url.pathname);
       const code = wsMatch[1].toUpperCase();
       const id = env.ROOMS.idFromName(code);
       const stub = env.ROOMS.get(id);

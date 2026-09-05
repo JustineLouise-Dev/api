@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>Sambung Kata — Admin</title>
+<style>
+  :root {
+    --bg: #0b0f14;
+    --panel: #121821;
+    --border: #223040;
+    --text: #dbe4ee;
+    --muted: #7f92a6;
+    --accent: #4fd1c5;
+    --bad: #ff6b6b;
+    --good: #4fd18a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 24px;
+  }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
+
+  #login {
+    max-width: 380px;
+    margin: 80px auto;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 28px;
+  }
+  #login h1 { text-align: center; margin-bottom: 16px; }
+  #login input {
+    width: 100%;
+    padding: 10px 12px;
+    background: #0d1319;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 14px;
+    margin-bottom: 12px;
+  }
+  #login button, .btn {
+    width: 100%;
+    padding: 10px 12px;
+    background: var(--accent);
+    color: #06201d;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+  }
+  #login button:hover, .btn:hover { opacity: 0.9; }
+  #loginError { color: var(--bad); font-size: 13px; margin-top: 8px; min-height: 16px; }
+
+  #dashboard { display: none; max-width: 1100px; margin: 0 auto; }
+
+  .stats { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
+  .stat {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 18px;
+    min-width: 110px;
+  }
+  .stat .num { font-size: 22px; font-weight: 700; }
+  .stat .label { color: var(--muted); font-size: 12px; margin-top: 2px; }
+
+  .toolbar {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+    margin-bottom: 16px;
+  }
+  .toolbar select, .toolbar input {
+    background: #0d1319;
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 10px;
+    border-radius: 8px;
+    font-size: 13px;
+  }
+  .toolbar .btn { width: auto; padding: 8px 14px; }
+  .toolbar .spacer { flex: 1; }
+  #autoRefreshLabel { color: var(--muted); font-size: 13px; display: flex; align-items: center; gap: 6px; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    font-size: 13px;
+  }
+  thead th {
+    text-align: left;
+    padding: 10px 12px;
+    background: #0d1319;
+    color: var(--muted);
+    font-weight: 600;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  tbody td {
+    padding: 9px 12px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: rgba(255,255,255,0.02); }
+
+  .ip { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .ipv {
+    display: inline-block;
+    font-family: -apple-system, sans-serif;
+    font-size: 10px;
+    color: var(--muted);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 4px;
+    vertical-align: middle;
+  }
+  .ua { color: var(--muted); font-size: 12px; max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .time { color: var(--muted); white-space: nowrap; }
+
+  #empty { color: var(--muted); text-align: center; padding: 40px 0; }
+  #note { color: var(--muted); font-size: 12px; margin-top: 12px; }
+
+  .path { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+  .expandBtn {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    border-radius: 6px;
+    padding: 3px 8px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .expandBtn:hover { color: var(--text); border-color: var(--accent); }
+  tr.detailRow td {
+    background: #0d1319;
+    padding: 12px 16px;
+  }
+  tr.detailRow pre {
+    margin: 0;
+    white-space: pre-wrap;
+    word-break: break-all;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px;
+    color: var(--text);
+  }
+</style>
+</head>
+<body>
+
+  <div id="login">
+    <h1>🔤 Sambung Kata — Admin</h1>
+    <input type="password" id="keyInput" placeholder="Admin key" autocomplete="current-password">
+    <button id="loginBtn">Masuk</button>
+    <div id="loginError"></div>
+  </div>
+
+  <div id="dashboard">
+    <h1>Aktivitas Koneksi</h1>
+    <div class="sub">Detail koneksi mentah dari setiap hit ke /api/room, /exists, dan /ws — silakan analisa sendiri mana yang terlihat seperti bot.</div>
+
+    <div class="stats">
+      <div class="stat"><div class="num" id="statTotal">–</div><div class="label">Total hit (tersimpan)</div></div>
+      <div class="stat"><div class="num" id="statShown">–</div><div class="label">Ditampilkan saat ini</div></div>
+    </div>
+
+    <div class="toolbar">
+      <input type="text" id="filterIp" placeholder="Filter IP…">
+      <select id="filterIpVersion">
+        <option value="">Semua IP</option>
+        <option value="IPv4">Hanya IPv4</option>
+        <option value="IPv6">Hanya IPv6</option>
+      </select>
+      <button class="btn" id="refreshBtn" style="width:auto;">Refresh</button>
+      <div class="spacer"></div>
+      <label id="autoRefreshLabel">
+        <input type="checkbox" id="autoRefresh"> Auto-refresh 15s
+      </label>
+      <button class="btn" id="logoutBtn" style="width:auto; background:transparent; border:1px solid var(--border); color:var(--muted);">Keluar</button>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Waktu</th>
+          <th>IP</th>
+          <th>Endpoint</th>
+          <th>Negara / Kota</th>
+          <th>ASN / Org</th>
+          <th>TLS / HTTP</th>
+          <th>Accept-Lang</th>
+          <th>Sec-Fetch</th>
+          <th>User-Agent</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <div id="empty" style="display:none;">Belum ada data kunjungan.</div>
+    <div id="note"></div>
+  </div>
+
+<script>
+(function () {
+  // Ganti dengan URL worker kamu (sama seperti WORKER_URL di file game),
+  // atau kosongkan ('') jika admin.html ini di-deploy di origin yang sama.
+  const API_BASE = '';
+
+  const STORAGE_KEY = 'sambungkata_admin_key';
+  let adminKey = sessionStorage.getItem(STORAGE_KEY) || '';
+  let autoRefreshTimer = null;
+
+  const $ = (id) => document.getElementById(id);
+
+  function showDashboard() {
+    $('login').style.display = 'none';
+    $('dashboard').style.display = 'block';
+    loadVisits();
+  }
+
+  function showLogin(errorMsg) {
+    $('login').style.display = 'block';
+    $('dashboard').style.display = 'none';
+    $('loginError').textContent = errorMsg || '';
+  }
+
+  async function loadVisits() {
+    const ipFilter = $('filterIp').value.trim();
+    const ipVersionFilter = $('filterIpVersion').value;
+    const params = new URLSearchParams();
+    if (ipFilter) params.set('ip', ipFilter);
+    if (ipVersionFilter) params.set('ipVersion', ipVersionFilter);
+    params.set('limit', '300');
+
+    let res;
+    try {
+      res = await fetch(API_BASE + '/api/visits?' + params.toString(), {
+        headers: { 'X-Admin-Key': adminKey },
+      });
+    } catch (err) {
+      showLogin('Gagal menghubungi server: ' + err.message);
+      return;
+    }
+
+    if (res.status === 401) {
+      sessionStorage.removeItem(STORAGE_KEY);
+      showLogin('Admin key salah atau kedaluwarsa.');
+      return;
+    }
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      showLogin(data.error || 'Terjadi kesalahan.');
+      return;
+    }
+
+    renderVisits(data);
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str == null ? '' : String(str);
+    return div.innerHTML;
+  }
+
+  function renderVisits(data) {
+    const rowsEl = $('rows');
+    const visits = data.visits || [];
+    const summary = data.summary || {};
+
+    $('statTotal').textContent = summary.total ?? visits.length;
+    $('statShown').textContent = visits.length;
+
+    if (data.note) {
+      $('note').textContent = data.note;
+    } else {
+      $('note').textContent = '';
+    }
+
+    if (visits.length === 0) {
+      rowsEl.innerHTML = '';
+      $('empty').style.display = 'block';
+      return;
+    }
+    $('empty').style.display = 'none';
+
+    rowsEl.innerHTML = visits.map((v, i) => {
+      const time = v.time ? new Date(v.time).toLocaleString('id-ID') : '–';
+      const geo = [v.city, v.country].filter(Boolean).join(', ') || '–';
+      const asnOrg = [v.asn ? ('AS' + v.asn) : null, v.asOrganization].filter(Boolean).join(' · ') || '–';
+      const tlsHttp = [v.tlsVersion, v.httpProtocol].filter(Boolean).join(' / ') || '–';
+      const secFetch = [v.secFetchSite, v.secFetchMode, v.secFetchDest].filter(Boolean).join(' / ') || '–';
+      const detailId = 'detail-' + i;
+
+      const mainRow = '<tr>' +
+        '<td class="time">' + escapeHtml(time) + '</td>' +
+        '<td class="ip">' + escapeHtml(v.ip || '–') + (v.ipVersion ? ' <span class="ipv">' + escapeHtml(v.ipVersion) + '</span>' : '') + '</td>' +
+        '<td class="path">' + escapeHtml((v.method || '') + ' ' + (v.path || '')) + '</td>' +
+        '<td>' + escapeHtml(geo) + '</td>' +
+        '<td>' + escapeHtml(asnOrg) + '</td>' +
+        '<td>' + escapeHtml(tlsHttp) + '</td>' +
+        '<td>' + escapeHtml(v.acceptLanguage || '–') + '</td>' +
+        '<td>' + escapeHtml(secFetch) + '</td>' +
+        '<td class="ua" title="' + escapeHtml(v.userAgent || '') + '">' + escapeHtml(v.userAgent || '–') + '</td>' +
+        '<td><button class="expandBtn" data-target="' + detailId + '">Detail</button></td>' +
+        '</tr>';
+
+      const rawHeaders = v.headers ? JSON.stringify(v.headers, null, 2) : '{}';
+      const detailRow = '<tr class="detailRow" id="' + detailId + '" style="display:none;">' +
+        '<td colspan="10"><pre>' + escapeHtml(rawHeaders) + '</pre></td>' +
+        '</tr>';
+
+      return mainRow + detailRow;
+    }).join('');
+
+    rowsEl.querySelectorAll('.expandBtn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const target = $(btn.getAttribute('data-target'));
+        if (!target) return;
+        const visible = target.style.display !== 'none';
+        target.style.display = visible ? 'none' : 'table-row';
+        btn.textContent = visible ? 'Detail' : 'Tutup';
+      });
+    });
+  }
+
+  function setupAutoRefresh() {
+    $('autoRefresh').addEventListener('change', (e) => {
+      if (e.target.checked) {
+        autoRefreshTimer = setInterval(loadVisits, 15000);
+      } else {
+        clearInterval(autoRefreshTimer);
+      }
+    });
+  }
+
+  $('loginBtn').addEventListener('click', () => {
+    const val = $('keyInput').value.trim();
+    if (!val) return;
+    adminKey = val;
+    sessionStorage.setItem(STORAGE_KEY, adminKey);
+    showDashboard();
+  });
+
+  $('keyInput').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') $('loginBtn').click();
+  });
+
+  $('refreshBtn').addEventListener('click', loadVisits);
+  $('filterIpVersion').addEventListener('change', loadVisits);
+  $('filterIp').addEventListener('keydown', (e) => { if (e.key === 'Enter') loadVisits(); });
+
+  $('logoutBtn').addEventListener('click', () => {
+    sessionStorage.removeItem(STORAGE_KEY);
+    adminKey = '';
+    clearInterval(autoRefreshTimer);
+    $('autoRefresh').checked = false;
+    showLogin();
+  });
+
+  setupAutoRefresh();
+
+  if (adminKey) {
+    showDashboard();
+  } else {
+    showLogin();
+  }
+})();
+</script>
+</body>
+</html>
