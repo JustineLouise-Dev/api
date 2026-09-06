@@ -1,25 +1,37 @@
 /**
- * Sambung Kata — Cloudflare Worker entry point.
+ * Sambung Kata + Tic-Tac-Toe — Cloudflare Worker entry point.
  *
- * Routes:
+ * Routes (Sambung Kata):
  *   POST /api/room               -> create a new room, returns { code }
  *   GET  /api/room/:code/exists  -> check if a room code is valid
  *   GET  /ws/:code?name=...      -> upgrade to WebSocket, join room :code
+ *
+ * Routes (Tic-Tac-Toe):
+ *   POST /api/ttt/room               -> create a new room, returns { code }
+ *   GET  /api/ttt/room/:code/exists  -> check if a room code is valid
+ *   GET  /ws/ttt/:code?name=...      -> upgrade to WebSocket, join room :code
+ *
+ * Routes (shared):
  *   GET  /api/visits             -> (admin only) list logged connection hits
  *
- * All room state (players, turn order, timers, word chain, scoring) lives
- * inside the RoomDurableObject so every player in a room talks to the same
- * single-threaded object — no external DB needed for realtime sync.
+ * All room state (players, turn order, timers, word chain / board, scoring)
+ * lives inside the respective Durable Object (RoomDurableObject for Sambung
+ * Kata, TicTacToeDurableObject for Tic-Tac-Toe) so every player in a room
+ * talks to the same single-threaded object — no external DB needed for
+ * realtime sync. Each game has its own DO namespace, so room codes never
+ * collide across game types.
  *
- * Every /api/room, /exists, and /ws upgrade hit is also fire-and-forget
- * logged (raw connection details only, no bot scoring/judgement) into a
- * single global VisitLogDurableObject for inspection via admin.html.
+ * Every /api/room, /api/ttt/room, /exists, and /ws upgrade hit is also
+ * fire-and-forget logged (raw connection details only, no bot
+ * scoring/judgement) into a single global VisitLogDurableObject for
+ * inspection via admin.html.
  */
 
 import { RoomDurableObject } from "./room.js";
 import { VisitLogDurableObject } from "./visitlog.js";
+import { TicTacToeDurableObject } from "./tictactoe.js";
 
-export { RoomDurableObject, VisitLogDurableObject };
+export { RoomDurableObject, VisitLogDurableObject, TicTacToeDurableObject };
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -207,7 +219,7 @@ export default {
       return json(data);
     }
 
-    // --- Create room ---
+    // --- Create room (Sambung Kata) ---
     if (url.pathname === "/api/room" && request.method === "POST") {
       logVisit(request, env, url.pathname);
       let code = randomRoomCode();
@@ -227,7 +239,7 @@ export default {
       return json({ code });
     }
 
-    // --- Check room exists ---
+    // --- Check room exists (Sambung Kata) ---
     const existsMatch = url.pathname.match(/^\/api\/room\/([A-Z0-9]+)\/exists$/i);
     if (existsMatch && request.method === "GET") {
       logVisit(request, env, url.pathname);
@@ -239,13 +251,53 @@ export default {
       return json({ exists: !!status.initialized, playerCount: status.playerCount || 0 });
     }
 
-    // --- WebSocket upgrade into a room ---
+    // --- WebSocket upgrade into a room (Sambung Kata) ---
     const wsMatch = url.pathname.match(/^\/ws\/([A-Z0-9]+)$/i);
     if (wsMatch) {
       logVisit(request, env, url.pathname);
       const code = wsMatch[1].toUpperCase();
       const id = env.ROOMS.idFromName(code);
       const stub = env.ROOMS.get(id);
+      return stub.fetch(request);
+    }
+
+    // --- Create room (Tic-Tac-Toe) ---
+    if (url.pathname === "/api/ttt/room" && request.method === "POST") {
+      logVisit(request, env, url.pathname);
+      let code = randomRoomCode();
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const id = env.TICTACTOE.idFromName(code);
+        const stub = env.TICTACTOE.get(id);
+        const res = await stub.fetch("https://internal/status");
+        const status = await res.json();
+        if (!status.initialized) break;
+        code = randomRoomCode();
+      }
+      const id = env.TICTACTOE.idFromName(code);
+      const stub = env.TICTACTOE.get(id);
+      await stub.fetch("https://internal/init", { method: "POST" });
+      return json({ code });
+    }
+
+    // --- Check room exists (Tic-Tac-Toe) ---
+    const tttExistsMatch = url.pathname.match(/^\/api\/ttt\/room\/([A-Z0-9]+)\/exists$/i);
+    if (tttExistsMatch && request.method === "GET") {
+      logVisit(request, env, url.pathname);
+      const code = tttExistsMatch[1].toUpperCase();
+      const id = env.TICTACTOE.idFromName(code);
+      const stub = env.TICTACTOE.get(id);
+      const res = await stub.fetch("https://internal/status");
+      const status = await res.json();
+      return json({ exists: !!status.initialized, playerCount: status.playerCount || 0 });
+    }
+
+    // --- WebSocket upgrade into a room (Tic-Tac-Toe) ---
+    const tttWsMatch = url.pathname.match(/^\/ws\/ttt\/([A-Z0-9]+)$/i);
+    if (tttWsMatch) {
+      logVisit(request, env, url.pathname);
+      const code = tttWsMatch[1].toUpperCase();
+      const id = env.TICTACTOE.idFromName(code);
+      const stub = env.TICTACTOE.get(id);
       return stub.fetch(request);
     }
 

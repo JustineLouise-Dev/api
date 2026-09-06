@@ -14,6 +14,10 @@ class_name = "RoomDurableObject"
 name = "VISIT_LOG"
 class_name = "VisitLogDurableObject"
 
+[[durable_objects.bindings]]
+name = "TICTACTOE"
+class_name = "TicTacToeDurableObject"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["RoomDurableObject"]
@@ -21,3 +25,7 @@ new_sqlite_classes = ["RoomDurableObject"]
 [[migrations]]
 tag = "v2"
 new_sqlite_classes = ["VisitLogDurableObject"]
+
+[[migrations]]
+tag = "v3"
+new_sqlite_classes = ["TicTacToeDurableObject"]
